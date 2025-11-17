@@ -43,6 +43,9 @@ Start commands:
 
 # Full reset (recreate dirs/files, update genesis timestamp, wipe CHAINDATA), then start
 ./netspawner reset
+
+# Generate a new Ed25519 key pair as JSON (optionally pass an existing mnemonic/password)
+./netspawner keygen -mnemonic "word1 ... word24" -passphrase "secret" -path 44/7337/0/0
 ```
 
 Log output: each node runs as a separate process. stdout/stderr are streamed and prefixed, e.g.

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
@@ -9,6 +10,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	edkeys "github.com/modulrcloud/net-spawner/ed25519"
 )
 
 var (
@@ -30,6 +33,7 @@ Usage:
 Commands:
   resume   Resume network from the same point
   reset    Reset and start the network from init (progress drop)
+  keygen   Generate an Ed25519 key pair as JSON
   help     Show this help
 
 Flags:
@@ -68,6 +72,14 @@ func main() {
 		}
 	case "reset":
 		if err := resetNetwork(); err != nil {
+			fmt.Fprintln(os.Stderr, "Error:", err)
+			os.Exit(1)
+		}
+	case "keygen":
+		if err := runKeygen(flag.Args()[1:]); err != nil {
+			if err == flag.ErrHelp {
+				return
+			}
 			fmt.Fprintln(os.Stderr, "Error:", err)
 			os.Exit(1)
 		}
@@ -181,4 +193,38 @@ func resetNetwork() error {
 	fmt.Println("Timestamps updated and CHAINDATA directories deleted")
 
 	return resumeNetwork()
+}
+
+func runKeygen(args []string) error {
+	fs := flag.NewFlagSet("keygen", flag.ContinueOnError)
+	mnemonic := fs.String("mnemonic", "", "Existing BIP39 mnemonic. If empty, a new 24-word phrase will be generated")
+	passphrase := fs.String("passphrase", "", "Optional mnemonic password")
+	derivationPath := fs.String("path", "", "BIP44 derivation path numbers separated by '/' (default 44/7337/0/0)")
+
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+
+	var bip44Path []uint32
+	if strings.TrimSpace(*derivationPath) != "" {
+		parts := strings.Split(*derivationPath, "/")
+		bip44Path = make([]uint32, 0, len(parts))
+		for _, part := range parts {
+			part = strings.TrimSpace(part)
+			if part == "" {
+				continue
+			}
+			val, err := strconv.ParseUint(part, 10, 32)
+			if err != nil {
+				return fmt.Errorf("invalid BIP44 path component %q: %w", part, err)
+			}
+			bip44Path = append(bip44Path, uint32(val))
+		}
+	}
+
+	box := edkeys.GenerateKeyPair(*mnemonic, *passphrase, bip44Path)
+
+	enc := json.NewEncoder(os.Stdout)
+	enc.SetIndent("", "  ")
+	return enc.Encode(box)
 }
